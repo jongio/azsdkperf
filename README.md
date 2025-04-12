@@ -37,21 +37,34 @@ AZURE_SUBSCRIPTION_ID=your_subscription_id
 STORAGE_ACCOUNT_NAME=mystorageacct
 ```
 
-2. .NET Setup
+2. Start PowerShell:
+   - Windows: Open PowerShell
+   - Linux/macOS:
+     ```bash
+     pwsh
+     ```
+
+3. .NET Setup
 ```bash
 cd net
 dotnet restore
 ```
 
-3. Python Setup
+4. Python Setup
 ```bash
 cd python
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Windows
+.venv\Scripts\Activate.ps1
+
+# Linux/macOS
+./.venv/bin/Activate.ps1
+
 pip install -r requirements.txt
 ```
 
-4. Node.js Setup
+5. Node.js Setup
 ```bash
 cd js
 npm install

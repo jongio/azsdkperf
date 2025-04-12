@@ -32,11 +32,7 @@ function Sign-Build {
     param([string]$Configuration)
     if ($CertificateSubject) {
         Write-Host "Signing $Configuration build..." -ForegroundColor Cyan
-        if ($IsWindows) {
-            .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
-        } else {
-            .\Sign-OutputsLinux.ps1 -CertificateSubject $CertificateSubject
-        }
+        .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
     }
 }
 
@@ -62,7 +58,8 @@ $commands = @(
             Clean-DotNet
             Build-DotNet "Debug"
             Push-Location net
-            dotnet ".\bin\Debug\net9.0\azsdkperf.dll"
+            $dllPath = Join-Path "bin" "Debug" "net9.0" "azsdkperf.dll"
+            dotnet $dllPath
             Pop-Location
         }
     },
@@ -72,7 +69,8 @@ $commands = @(
             Clean-DotNet
             Build-DotNet "Release"
             Push-Location net
-            dotnet ".\bin\Release\net9.0\azsdkperf.dll"
+            $dllPath = Join-Path "bin" "Release" "net9.0" "azsdkperf.dll"
+            dotnet $dllPath
             Pop-Location
         }
     },
@@ -97,6 +95,8 @@ Write-Host "=============================================" -ForegroundColor Cyan
 
 foreach ($cmd in $commands) {
     Write-Host "`nExecuting: $($cmd.Name)" -ForegroundColor Yellow
+    Write-Host "Command to execute:" -ForegroundColor Yellow
+    Write-Host $cmd.Command.ToString() -ForegroundColor Gray
     
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     
@@ -139,7 +139,8 @@ $signedCommands = @(
             Build-DotNet "Debug"
             Sign-Build "Debug"
             Push-Location net
-            dotnet ".\bin\Debug\net9.0\azsdkperf.dll"
+            $dllPath = Join-Path "bin" "Debug" "net9.0" "azsdkperf.dll"
+            dotnet $dllPath
             Pop-Location
         }
     },
@@ -150,7 +151,8 @@ $signedCommands = @(
             Build-DotNet "Release"
             Sign-Build "Release"
             Push-Location net
-            dotnet ".\bin\Release\net9.0\azsdkperf.dll"
+            $dllPath = Join-Path "bin" "Release" "net9.0" "azsdkperf.dll"
+            dotnet $dllPath
             Pop-Location
         }
     }
@@ -158,7 +160,8 @@ $signedCommands = @(
 
 foreach ($cmd in $signedCommands) {
     Write-Host "`nExecuting: $($cmd.Name)" -ForegroundColor Yellow
-    Write-Host "Command: $($cmd.Command)"
+    Write-Host "Command to execute:" -ForegroundColor Yellow
+    Write-Host $cmd.Command.ToString() -ForegroundColor Gray
     
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     

@@ -20,7 +20,7 @@ $storageAccountName = Get-EnvValue "STORAGE_ACCOUNT_NAME"
 $commands = @(
     @{
         Name = "dotnet run command"
-        Command = "dotnet run"
+        Command = "Push-Location net; dotnet run; Pop-Location"
     },
     @{
         Name = "az command"

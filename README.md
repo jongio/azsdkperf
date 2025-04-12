@@ -57,6 +57,19 @@ cd js
 npm install
 ```
 
+## Java
+
+1. Navigate to the Java directory:
+   ```bash
+   cd java
+   ```
+
+2. Build and run the project:
+   ```bash
+   mvn clean package
+   java -cp target/azsdkperf-1.0-SNAPSHOT.jar com.azsdkperf.App
+   ```
+
 ## Running Performance Tests
 
 ```powershell

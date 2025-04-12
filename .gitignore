@@ -21,3 +21,13 @@ dist/
 
 ## Environment files
 .env
+
+# Java
+target/
+.classpath
+.project
+.settings/
+*.class
+*.jar
+.idea/
+*.iml

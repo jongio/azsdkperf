@@ -19,6 +19,10 @@ $storageAccountName = Get-EnvValue "STORAGE_ACCOUNT_NAME"
 
 $commands = @(
     @{
+        Name = "az command"
+        Command = "az storage table list --account-name $storageAccountName --auth-mode login"
+    },
+    @{
         Name = "dotnet run command"
         Command = "Push-Location net; dotnet run; Pop-Location"
     },
@@ -30,9 +34,17 @@ $commands = @(
         Name = "node command"
         Command = "Push-Location js; node index.js; Pop-Location"
     },
+    # @{
+    #     Name = "java command"
+    #     Command = "Push-Location java; mvn exec:java -Dexec.mainClass='com.azsdkperf.App' -q; Pop-Location"
+    # },
     @{
-        Name = "az command"
-        Command = "az storage table list --account-name $storageAccountName --auth-mode login"
+        Name = "dotnet debug (pre-built)"
+        Command = "Push-Location net; dotnet '$PSScriptRoot\net\bin\Debug\net9.0\azsdkperf.dll'; Pop-Location"
+    },
+    @{
+        Name = "dotnet release (pre-built)"
+        Command = "Push-Location net; dotnet '$PSScriptRoot\net\bin\Release\net9.0\azsdkperf.dll'; Pop-Location"
     }
 )
 

@@ -32,7 +32,11 @@ function Sign-Build {
     param([string]$Configuration)
     if ($CertificateSubject) {
         Write-Host "Signing $Configuration build..." -ForegroundColor Cyan
-        .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
+        if ($IsWindows) {
+            .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
+        } else {
+            .\Sign-OutputsLinux.ps1 -CertificateSubject $CertificateSubject
+        }
     }
 }
 

@@ -1,66 +1,72 @@
 # Azure SDK Performance Comparison
 
-This project compares the performance between Azure SDK for .NET and Azure CLI when listing tables in a Storage Account.
+Compare performance between different Azure SDK implementations and CLI for common storage operations.
 
 ## Prerequisites
 
-1. Install Azure CLI
-```powershell
-winget install Microsoft.AzureCLI
-# or
-choco install azure-cli
-```
+- .NET 9.0 SDK
+- Python 3.8+
+- Node.js 18+
+- Azure CLI
 
-2. Install .NET 9.0 SDK
-3. Azure Subscription with Storage Account access
+## Azure Setup
 
-## Setup
-
-1. Login to Azure CLI:
-```powershell
+1. Install the Azure CLI from: https://docs.microsoft.com/cli/azure/install-azure-cli
+2. Login to Azure:
+```bash
 az login
 ```
 
-2. Create a Storage Account and Table:
-```powershell
-# Set variables
-$resourceGroup = "your-rg-name"
-$location = "eastus"
-$storageAccount = "youraccountname"
-$tableName = "testtable"
+3. Create a storage account and table:
+```bash
+# Create resource group
+az group create --name mystorage-rg --location eastus
 
-# Create Resource Group if needed
-az group create --name $resourceGroup --location $location
+# Create storage account
+az storage account create --name mystorageacct --resource-group mystorage-rg --location eastus --sku Standard_LRS
 
-# Create Storage Account
-az storage account create `
-    --name $storageAccount `
-    --resource-group $resourceGroup `
-    --location $location `
-    --sku Standard_LRS
-
-# Create Table
-az storage table create `
-    --name $tableName `
-    --account-name $storageAccount `
-    --auth-mode login
+# Create table
+az storage table create --name mytable --account-name mystorageacct
 ```
 
-3. Configure environment:
-```powershell
-# Copy sample env file
-Copy-Item .env.sample .env
+## Project Setup
 
-# Edit .env file with your values:
-# AZURE_SUBSCRIPTION_ID=your-subscription-id
-# STORAGE_ACCOUNT_NAME=your-storage-account-name
+1. Create a `.env` file in the root directory with:
+```
+AZURE_SUBSCRIPTION_ID=your_subscription_id
+STORAGE_ACCOUNT_NAME=mystorageacct
 ```
 
-## Run Performance Comparison
+2. .NET Setup
+```bash
+cd net
+dotnet restore
+```
 
-Execute the comparison script:
+3. Python Setup
+```bash
+cd python
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+4. Node.js Setup
+```bash
+cd js
+npm install
+```
+
+## Running Performance Tests
+
 ```powershell
 .\Compare-CommandTimes.ps1
 ```
 
-This will output the execution times for both the .NET SDK and Azure CLI approaches.
+This will execute the same storage operation using:
+- .NET SDK
+- Python SDK
+- Node.js SDK
+- Azure CLI
+
+and compare their execution times.

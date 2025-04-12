@@ -1,0 +1,19 @@
+{
+    "name": "Azure SDK Performance Test",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/azure-cli:1": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-dotnettools.csharp",
+                "ms-vscode.powershell",
+                "ms-vscode.azure-account"
+            ]
+        }
+    },
+    "remoteUser": "vscode"
+}

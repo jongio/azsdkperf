@@ -1,4 +1,7 @@
-param()
+param(
+    [Parameter()]
+    [string]$CertificateSubject = "CN=azuresdk"
+)
 
 # Function to read .env file
 function Get-EnvValue {
@@ -11,6 +14,28 @@ function Get-EnvValue {
     throw "Cannot find .env file or $key in .env file"
 }
 
+function Clean-DotNet {
+    Push-Location net
+    dotnet clean --nologo -v quiet
+    Pop-Location
+}
+
+function Build-DotNet {
+    param([string]$Configuration)
+    Push-Location net
+    dotnet clean --nologo -v quiet
+    dotnet build -c $Configuration --nologo -v quiet
+    Pop-Location
+}
+
+function Sign-Build {
+    param([string]$Configuration)
+    if ($CertificateSubject) {
+        Write-Host "Signing $Configuration build..." -ForegroundColor Cyan
+        .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
+    }
+}
+
 # Store original location and change to src directory
 $originalLocation = Get-Location
 Set-Location $PSScriptRoot
@@ -19,32 +44,45 @@ $storageAccountName = Get-EnvValue "STORAGE_ACCOUNT_NAME"
 
 $commands = @(
     @{
-        Name = "az command"
-        Command = "az storage table list --account-name $storageAccountName --auth-mode login"
+        Name = "dotnet run (JIT)"
+        Command = {
+            Clean-DotNet
+            Push-Location net
+            dotnet run
+            Pop-Location
+        }
     },
     @{
-        Name = "dotnet run command"
-        Command = "Push-Location net; dotnet run; Pop-Location"
+        Name = "dotnet debug dll (unsigned)"
+        Command = {
+            Clean-DotNet
+            Build-DotNet "Debug"
+            Push-Location net
+            dotnet ".\bin\Debug\net9.0\azsdkperf.dll"
+            Pop-Location
+        }
+    },
+    @{
+        Name = "dotnet release dll (unsigned)"
+        Command = {
+            Clean-DotNet
+            Build-DotNet "Release"
+            Push-Location net
+            dotnet ".\bin\Release\net9.0\azsdkperf.dll"
+            Pop-Location
+        }
     },
     @{
         Name = "python command"
-        Command = "Push-Location python; python program.py; Pop-Location"
+        Command = { Push-Location python; python program.py; Pop-Location }
     },
     @{
         Name = "node command"
-        Command = "Push-Location js; node index.js; Pop-Location"
-    },
-    # @{
-    #     Name = "java command"
-    #     Command = "Push-Location java; mvn exec:java -Dexec.mainClass='com.azsdkperf.App' -q; Pop-Location"
-    # },
-    @{
-        Name = "dotnet debug (pre-built)"
-        Command = "Push-Location net; dotnet '$PSScriptRoot\net\bin\Debug\net9.0\azsdkperf.dll'; Pop-Location"
+        Command = { Push-Location js; node index.js; Pop-Location }
     },
     @{
-        Name = "dotnet release (pre-built)"
-        Command = "Push-Location net; dotnet '$PSScriptRoot\net\bin\Release\net9.0\azsdkperf.dll'; Pop-Location"
+        Name = "az command"
+        Command = { az storage table list --account-name $storageAccountName --auth-mode login }
     }
 )
 
@@ -55,12 +93,11 @@ Write-Host "=============================================" -ForegroundColor Cyan
 
 foreach ($cmd in $commands) {
     Write-Host "`nExecuting: $($cmd.Name)" -ForegroundColor Yellow
-    Write-Host "Command: $($cmd.Command)"
     
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     
     try {
-        $output = Invoke-Expression $cmd.Command
+        $output = & $cmd.Command
         $sw.Stop()
         
         # Display the output immediately after command execution
@@ -69,7 +106,7 @@ foreach ($cmd in $commands) {
         
         $results += [PSCustomObject]@{
             Name = $cmd.Name
-            Command = $cmd.Command
+            Command = $cmd.Command.ToString()
             ExecutionTime = $sw.Elapsed
             Success = $true
             Output = $output
@@ -79,7 +116,69 @@ foreach ($cmd in $commands) {
         $sw.Stop()
         $results += [PSCustomObject]@{
             Name = $cmd.Name
-            Command = $cmd.Command
+            Command = $cmd.Command.ToString()
+            ExecutionTime = $sw.Elapsed
+            Success = $false
+            Error = $_.Exception.Message
+        }
+    }
+}
+
+# Now sign and test the signed builds
+Write-Host "`nSigning .NET assemblies..." -ForegroundColor Cyan
+
+$signedCommands = @(
+    @{
+        Name = "dotnet debug dll (signed)"
+        Command = {
+            Clean-DotNet
+            Build-DotNet "Debug"
+            Sign-Build "Debug"
+            Push-Location net
+            dotnet ".\bin\Debug\net9.0\azsdkperf.dll"
+            Pop-Location
+        }
+    },
+    @{
+        Name = "dotnet release dll (signed)"
+        Command = {
+            Clean-DotNet
+            Build-DotNet "Release"
+            Sign-Build "Release"
+            Push-Location net
+            dotnet ".\bin\Release\net9.0\azsdkperf.dll"
+            Pop-Location
+        }
+    }
+)
+
+foreach ($cmd in $signedCommands) {
+    Write-Host "`nExecuting: $($cmd.Name)" -ForegroundColor Yellow
+    Write-Host "Command: $($cmd.Command)"
+    
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    
+    try {
+        $output = & $cmd.Command
+        $sw.Stop()
+        
+        # Display the output immediately after command execution
+        Write-Host "`nCommand Output:" -ForegroundColor Green
+        $output | ForEach-Object { Write-Host $_ }
+        
+        $results += [PSCustomObject]@{
+            Name = $cmd.Name
+            Command = $cmd.Command.ToString()
+            ExecutionTime = $sw.Elapsed
+            Success = $true
+            Output = $output
+        }
+    }
+    catch {
+        $sw.Stop()
+        $results += [PSCustomObject]@{
+            Name = $cmd.Name
+            Command = $cmd.Command.ToString()
             ExecutionTime = $sw.Elapsed
             Success = $false
             Error = $_.Exception.Message

@@ -31,3 +31,10 @@ target/
 *.jar
 .idea/
 *.iml
+
+# Certificates
+*.cer
+*.pfx
+
+# Visual Studio
+.vs/

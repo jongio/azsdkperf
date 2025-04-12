@@ -83,3 +83,21 @@ This will execute the same storage operation using:
 - Azure CLI
 
 and compare their execution times.
+
+## Code Signing
+
+Before running performance comparisons with signed assemblies:
+
+1. Create a development certificate:
+   ```powershell
+   .\New-CodeSigningCert.ps1 -CertName "azuresdk"
+   ```
+
+2. Install the certificate when prompted using the default password: `Dev123!@#`
+
+3. Run comparisons with signing enabled:
+   ```powershell
+   .\Compare-CommandTimes.ps1 -CertificateSubject "CN=azuresdk" -IncludeSigning
+   ```
+
+Note: This uses a self-signed certificate for development purposes only.

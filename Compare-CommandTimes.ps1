@@ -23,6 +23,14 @@ $commands = @(
         Command = "Push-Location net; dotnet run; Pop-Location"
     },
     @{
+        Name = "python command"
+        Command = "Push-Location python; python program.py; Pop-Location"
+    },
+    @{
+        Name = "node command"
+        Command = "Push-Location js; node index.js; Pop-Location"
+    },
+    @{
         Name = "az command"
         Command = "az storage table list --account-name $storageAccountName --auth-mode login"
     }

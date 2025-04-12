@@ -51,6 +51,10 @@ foreach ($cmd in $commands) {
         $output = Invoke-Expression $cmd.Command
         $sw.Stop()
         
+        # Display the output immediately after command execution
+        Write-Host "`nCommand Output:" -ForegroundColor Green
+        $output | ForEach-Object { Write-Host $_ }
+        
         $results += [PSCustomObject]@{
             Name = $cmd.Name
             Command = $cmd.Command
@@ -81,6 +85,8 @@ foreach ($result in $results) {
     
     if ($result.Success) {
         Write-Host "Status: Success" -ForegroundColor Green
+        Write-Host "`nOutput:" -ForegroundColor Gray
+        $result.Output | ForEach-Object { Write-Host $_ }
     }
     else {
         Write-Host "Status: Failed" -ForegroundColor Red
@@ -101,6 +107,17 @@ if ($results.Count -eq 2 -and $results[0].Success -and $results[1].Success) {
     Write-Host "`nFull Command Details of Faster Operation:" -ForegroundColor Magenta
     Write-Host ($results | Where-Object { $_.Name -eq $fasterCommand }).Command
 }
+
+# Add execution time summary table
+Write-Host "`nExecution Time Summary:" -ForegroundColor Blue
+Write-Host "======================" -ForegroundColor Blue
+
+$summaryTable = $results | 
+    Where-Object { $_.Success } |
+    Select-Object @{N='Command';E={$_.Name}}, @{N='Time (seconds)';E={$_.ExecutionTime.TotalSeconds}} |
+    Sort-Object 'Time (seconds)'
+
+$summaryTable | Format-Table -AutoSize
 
 # Restore original location
 Set-Location $originalLocation

@@ -1,62 +1,52 @@
 param(
     [Parameter(Mandatory=$true)]
-    [string]$CertificateSubject,
+    [string]$CertificateSubject
+)
+
+# Find certificate with private key
+$cert = Get-ChildItem -Path "Cert:\CurrentUser\My" | 
+    Where-Object { $_.Subject -eq $CertificateSubject -and $_.HasPrivateKey } |
+    Select-Object -First 1
+
+if (-not $cert) {
+    throw "Certificate not found with subject: $CertificateSubject or missing private key"
+}
+
+Write-Host "Using certificate: $($cert.Subject) ($($cert.Thumbprint))"
+
+# Find the specific files we want to sign
+$binPath = Join-Path "net" "bin" "*"
+$filePaths = Get-ChildItem -Path $binPath -Recurse | Where-Object {
+    $_.Name -eq "azsdkperf.dll"
+}
+
+if (-not $filePaths) {
+    throw "No azsdkperf.dll found to sign"
+}
+
+Write-Host "Found files to sign:"
+$filePaths | ForEach-Object { Write-Host "  - $($_.FullName)" }
+
+# Sign each file
+foreach ($file in $filePaths) {
+    Write-Host "`nSigning $($file.Name)..." -ForegroundColor Cyan
     
-    [Parameter()]
-    [string]$TimestampServer = "http://timestamp.digicert.com"
-)
+    try {
+        # Sign with full chain
+        $result = Set-AuthenticodeSignature -FilePath $file.FullName `
+            -Certificate $cert `
+            -TimestampServer "http://timestamp.digicert.com" `
+            -HashAlgorithm SHA256 `
+            -IncludeChain All
 
-$builds = @(
-    ".\net\bin\Debug\net9.0",
-    ".\net\bin\Release\net9.0"
-)
-
-if ($IsWindows) {
-    # Find SignTool.exe in the Windows SDK
-    $programFiles = ${env:ProgramFiles(x86)}
-    $signtool = Get-ChildItem -Path "$programFiles\Windows Kits\10\bin\**\x64\signtool.exe" | 
-        Sort-Object -Property FullName -Descending | 
-        Select-Object -First 1
-
-    if (-not $signtool) {
-        throw "SignTool.exe not found. Please install the Windows SDK."
-    }
-
-    foreach ($buildPath in $builds) {
-        $files = Get-ChildItem -Path $buildPath -Filter "azsdkperf.*" -Include "*.exe","*.dll"
-        
-        foreach ($file in $files) {
-            Write-Host "Signing $($file.Name) in $buildPath..." -ForegroundColor Cyan
-            
-            & $signtool sign /fd SHA256 /n $CertificateSubject /tr $TimestampServer /td SHA256 /v $file.FullName
-            
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "Successfully signed $($file.Name)" -ForegroundColor Green
-            } else {
-                Write-Host "Failed to sign $($file.Name)" -ForegroundColor Red
-            }
+        if ($result.Status -ne "Valid") {
+            throw "Signing failed. Status: $($result.Status), StatusMessage: $($result.StatusMessage)"
         }
-    }
-} else {
-    # Linux signing using osslsigncode
-    foreach ($buildPath in $builds) {
-        $files = Get-ChildItem -Path $buildPath -Filter "azsdkperf.*" -Include "*.dll"
         
-        foreach ($file in $files) {
-            Write-Host "Signing $($file.Name) in $buildPath..." -ForegroundColor Cyan
-            
-            $pfxPath = "./cert/CodeSigning.pfx"
-            $tempFile = "$($file.FullName).signed"
-            
-            & osslsigncode sign -pkcs12 $pfxPath -pass "Dev123!@#" -ts $TimestampServer -h sha256 -in $file.FullName -out $tempFile
-            
-            if ($LASTEXITCODE -eq 0) {
-                Move-Item -Force $tempFile $file.FullName
-                Write-Host "Successfully signed $($file.Name)" -ForegroundColor Green
-            } else {
-                Write-Host "Failed to sign $($file.Name)" -ForegroundColor Red
-                if (Test-Path $tempFile) { Remove-Item $tempFile }
-            }
-        }
+        Write-Host "✓ Successfully signed $($file.Name)" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "❌ Failed to sign $($file.Name)" -ForegroundColor Red
+        throw
     }
 }

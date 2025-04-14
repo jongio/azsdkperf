@@ -38,7 +38,34 @@ if ($IsWindows) {
     $securePwd = ConvertTo-SecureString -String $Password -Force -AsPlainText
     Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $securePwd
 
-    Write-Host "`nCertificate created successfully:" -ForegroundColor Green
+    # Import into trusted stores
+    $stores = @(
+        @{ Name = "Root"; Location = "CurrentUser" },
+        @{ Name = "TrustedPublisher"; Location = "CurrentUser" }
+    )
+
+    foreach ($store in $stores) {
+        Write-Host "Installing certificate in $($store.Location)\$($store.Name) store..."
+        $certStore = New-Object System.Security.Cryptography.X509Certificates.X509Store $store.Name, $store.Location
+        $certStore.Open("ReadWrite")
+        $certStore.Add($cert)
+        $certStore.Close()
+    }
+
+    # Verify certificate is properly installed
+    foreach ($store in $stores) {
+        $certStore = New-Object System.Security.Cryptography.X509Certificates.X509Store $store.Name, $store.Location
+        $certStore.Open("ReadOnly")
+        $found = $certStore.Certificates | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
+        $certStore.Close()
+        
+        if (-not $found) {
+            throw "Certificate not found in $($store.Location)\$($store.Name) store"
+        }
+        Write-Host "✓ Certificate verified in $($store.Location)\$($store.Name) store" -ForegroundColor Green
+    }
+
+    Write-Host "`nCertificate created and installed successfully:" -ForegroundColor Green
     Write-Host "Public certificate: $certPath"
     Write-Host "Private key file:  $pfxPath"
     Write-Host "Thumbprint:        $($cert.Thumbprint)"

@@ -31,9 +31,21 @@ function Clean-DotNet {
 function Build-DotNet {
     param([string]$Configuration)
     Push-Location net
-    dotnet clean --nologo -v quiet
-    dotnet build -c $Configuration --nologo -v quiet
-    Pop-Location
+    try {
+        dotnet clean --nologo -v quiet
+        $buildOutput = dotnet build -c $Configuration --nologo
+        if ($LASTEXITCODE -ne 0) {
+            throw "Build failed: $buildOutput"
+        }
+        # Verify DLL exists
+        $dllPath = Join-Path "bin" $Configuration "net9.0" "azsdkperf.dll"
+        if (-not (Test-Path $dllPath)) {
+            throw "Build completed but DLL not found at: $dllPath"
+        }
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 function Verify-Signature {
@@ -63,32 +75,64 @@ function Sign-Build {
     param([string]$Configuration)
     if ($CertificateSubject) {
         Write-Host "Signing $Configuration build..." -ForegroundColor Cyan
-        .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
         
-        # Verify signatures
-        Write-Host "Verifying signatures..." -ForegroundColor Cyan
-        $dllPath = Join-Path "net" "bin" $Configuration "net9.0" "azsdkperf.dll"
-        $exePath = Join-Path "net" "bin" $Configuration "net9.0" "azsdkperf"
-        
-        Verify-Signature $dllPath
-        if (Test-Path $exePath) {
-            Verify-Signature $exePath
+        # Ensure we're in the script root directory
+        Push-Location $PSScriptRoot
+        try {
+            # Get paths to specific files that need signing
+            $binPath = Join-Path "net" "bin" $Configuration "net9.0"
+            Write-Host "Checking files in: $binPath"
+            
+            if (-not (Test-Path $binPath)) {
+                throw "Build output directory not found: $binPath. Did the build succeed?"
+            }
+
+            # Only sign our specific files
+            $filesToSign = @(
+                (Join-Path $binPath "azsdkperf.dll"),
+                (Join-Path $binPath "azsdkperf.exe")
+            ) | Where-Object { Test-Path $_ }
+
+            if (-not $filesToSign) {
+                throw "Neither azsdkperf.dll nor azsdkperf.exe found in $binPath"
+            }
+
+            Write-Host "Found files to sign:"
+            $filesToSign | ForEach-Object { Write-Host "  - $($_.FullName)" }
+
+            # Sign files
+            .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
+            
+            # Verify signatures
+            Write-Host "`nVerifying signatures..." -ForegroundColor Cyan
+            $filesToSign | ForEach-Object {
+                Verify-Signature $_
+            }
+        }
+        finally {
+            Pop-Location
         }
     }
 }
 
 # Add package installation functions
 function Install-NodePackages {
-    Push-Location js
-    Write-Host "Installing Node.js packages..." -ForegroundColor Gray
-    npm install
-    Pop-Location
+    if (-not (Test-Path (Join-Path "js" "node_modules"))) {
+        Push-Location js
+        Write-Host "Installing Node.js packages..." -ForegroundColor Gray
+        npm install
+        Pop-Location
+    }
 }
 
 function Install-PythonPackages {
     Push-Location python
-    Write-Host "Installing Python packages..." -ForegroundColor Gray
-    python -m pip install -r requirements.txt
+    # Check if any required package is missing
+    $missing = python -c "import pkg_resources, sys; sys.exit(len({'azure-storage-table'} - {pkg.key for pkg in pkg_resources.working_set}))" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Installing Python packages..." -ForegroundColor Gray
+        python -m pip install -r requirements.txt
+    }
     Pop-Location
 }
 
@@ -98,28 +142,37 @@ Set-Location $PSScriptRoot
 
 $storageAccountName = Get-EnvValue "STORAGE_ACCOUNT_NAME"
 
-# Install packages once at the start
-Write-Host "Installing dependencies..." -ForegroundColor Cyan
-Install-NodePackages
-Install-PythonPackages
-
 $commands = @(
     @{
-        Name = "dotnet run (JIT)"
+        Name = "dotnet run (JIT) - exclude MI"
         Setup = {
             Clean-DotNet
             Push-Location net
             dotnet build --nologo -v quiet
         }
         Command = {
-            dotnet run --no-build
+            dotnet run --no-build --excludeMI true
         }
         Cleanup = {
             Pop-Location
         }
     },
     @{
-        Name = "dotnet debug dll (unsigned)"
+        Name = "dotnet run (JIT) - include MI"
+        Setup = {
+            Clean-DotNet
+            Push-Location net
+            dotnet build --nologo -v quiet
+        }
+        Command = {
+            dotnet run --no-build --excludeMI false
+        }
+        Cleanup = {
+            Pop-Location
+        }
+    },
+    @{
+        Name = "dotnet debug dll (unsigned) - exclude MI"
         Setup = {
             Clean-DotNet
             Build-DotNet "Debug"
@@ -127,22 +180,22 @@ $commands = @(
         }
         Command = {
             $dllPath = Join-Path "bin" "Debug" "net9.0" "azsdkperf.dll"
-            dotnet $dllPath
+            dotnet $dllPath --excludeMI true
         }
         Cleanup = {
             Pop-Location
         }
     },
     @{
-        Name = "dotnet release dll (unsigned)"
+        Name = "dotnet debug dll (unsigned) - include MI"
         Setup = {
             Clean-DotNet
-            Build-DotNet "Release"
+            Build-DotNet "Debug"
             Push-Location net
         }
         Command = {
-            $dllPath = Join-Path "bin" "Release" "net9.0" "azsdkperf.dll"
-            dotnet $dllPath
+            $dllPath = Join-Path "bin" "Debug" "net9.0" "azsdkperf.dll"
+            dotnet $dllPath --excludeMI false
         }
         Cleanup = {
             Pop-Location
@@ -232,7 +285,7 @@ $commands = @(
 
 $signedCommands = @(
     @{
-        Name = "dotnet debug dll (signed)"
+        Name = "dotnet debug dll (signed) - exclude MI"
         Setup = {
             Clean-DotNet
             Build-DotNet "Debug"
@@ -241,23 +294,23 @@ $signedCommands = @(
         }
         Command = {
             $dllPath = Join-Path "bin" "Debug" "net9.0" "azsdkperf.dll"
-            dotnet $dllPath
+            dotnet $dllPath --excludeMI true
         }
         Cleanup = {
             Pop-Location
         }
     },
     @{
-        Name = "dotnet release dll (signed)"
+        Name = "dotnet debug dll (signed) - include MI"
         Setup = {
             Clean-DotNet
-            Build-DotNet "Release"
-            Sign-Build "Release"
+            Build-DotNet "Debug"
+            Sign-Build "Debug"
             Push-Location net
         }
         Command = {
-            $dllPath = Join-Path "bin" "Release" "net9.0" "azsdkperf.dll"
-            dotnet $dllPath
+            $dllPath = Join-Path "bin" "Debug" "net9.0" "azsdkperf.dll"
+            dotnet $dllPath --excludeMI false
         }
         Cleanup = {
             Pop-Location
@@ -279,6 +332,14 @@ if ($Filter) {
         Write-Host "No commands found matching filter: $Filter" -ForegroundColor Red
         exit 1
     }
+}
+
+# Only install packages for commands we'll actually run
+if ($commandsToRun | Where-Object { $_.Name -like "*node*" }) {
+    Install-NodePackages
+}
+if ($commandsToRun | Where-Object { $_.Name -like "*python*" }) {
+    Install-PythonPackages
 }
 
 foreach ($cmd in $commandsToRun) {

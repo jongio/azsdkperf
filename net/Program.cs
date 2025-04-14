@@ -12,7 +12,11 @@ if (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(storageAccountN
     throw new Exception("Please set AZURE_SUBSCRIPTION_ID and STORAGE_ACCOUNT_NAME in .env file");
 }
 
-var credential = new DefaultAzureCredential();
+var options = new DefaultAzureCredentialOptions
+{
+    ExcludeManagedIdentityCredential = true
+};
+var credential = new DefaultAzureCredential(options);
 var serviceUri = new Uri($"https://{storageAccountName}.table.core.windows.net");
 var tableServiceClient = new TableServiceClient(serviceUri, credential);
 

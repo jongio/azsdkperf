@@ -7,7 +7,15 @@ Compare performance between different Azure SDK implementations and CLI for comm
 - .NET 9.0 SDK
 - Python 3.8+
 - Node.js 18+
+- Java 17+
+- Maven 3.6+
 - Azure CLI
+- osslsigncode (for Linux code signing verification)
+
+On Linux systems, install osslsigncode:
+```bash
+sudo apt-get update && sudo apt-get install -y osslsigncode
+```
 
 ## Azure Setup
 
@@ -72,16 +80,10 @@ npm install
 
 ## Java
 
-1. Navigate to the Java directory:
-   ```bash
-   cd java
-   ```
-
-2. Build and run the project:
-   ```bash
-   mvn clean package
-   java -cp target/azsdkperf-1.0-SNAPSHOT.jar com.azsdkperf.App
-   ```
+Run the Java project using Maven:
+```bash
+mvn -f java/pom.xml clean package exec:java -Dexec.mainClass="com.azsdkperf.App"
+```
 
 ## Running Performance Tests
 

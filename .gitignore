@@ -18,6 +18,8 @@ venv/
 .env
 dist/
 *.egg-info/
+python/build
+program.spec
 
 ## Environment files
 .env
@@ -38,3 +40,5 @@ target/
 
 # Visual Studio
 .vs/
+js/azsdkperf-js-win.exe
+js/azsdkperf-js-linux

@@ -1,6 +1,6 @@
 package com.azsdkperf;
 
-import com.azure.identity.DefaultAzureCredential;
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.data.tables.TableServiceClient;
 import com.azure.data.tables.TableServiceClientBuilder;
 import io.github.cdimascio.dotenv.Dotenv;
@@ -19,7 +19,7 @@ public class App {
         String serviceUri = String.format("https://%s.table.core.windows.net", storageAccountName);
         TableServiceClient tableServiceClient = new TableServiceClientBuilder()
             .endpoint(serviceUri)
-            .credential(new DefaultAzureCredential())
+            .credential(new DefaultAzureCredentialBuilder().build())
             .buildClient();
 
         System.out.printf("Listing tables in %s:%n", storageAccountName);

@@ -73,40 +73,33 @@ function Verify-Signature {
 
 function Sign-Build {
     param([string]$Configuration)
+    # Only sign Release builds
+    if ($Configuration -ne "Release") {
+        Write-Host "Skipping signing for $Configuration build - only Release builds are signed" -ForegroundColor Yellow
+        return
+    }
+
     if ($CertificateSubject) {
         Write-Host "Signing $Configuration build..." -ForegroundColor Cyan
         
         # Ensure we're in the script root directory
         Push-Location $PSScriptRoot
         try {
-            # Get paths to specific files that need signing
-            $binPath = Join-Path "net" "bin" $Configuration "net9.0"
-            Write-Host "Checking files in: $binPath"
+            # Call Sign-Outputs.ps1 which now only handles Release builds
+            .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
             
-            if (-not (Test-Path $binPath)) {
-                throw "Build output directory not found: $binPath. Did the build succeed?"
-            }
-
-            # Only sign our specific files
-            $filesToSign = @(
+            # Get paths to verify
+            $binPath = Join-Path "net" "bin" $Configuration "net9.0"
+            $filesToVerify = @(
                 (Join-Path $binPath "azsdkperf.dll"),
                 (Join-Path $binPath "azsdkperf.exe")
             ) | Where-Object { Test-Path $_ }
-
-            if (-not $filesToSign) {
-                throw "Neither azsdkperf.dll nor azsdkperf.exe found in $binPath"
-            }
-
-            Write-Host "Found files to sign:"
-            $filesToSign | ForEach-Object { Write-Host "  - $($_.FullName)" }
-
-            # Sign files
-            .\Sign-Outputs.ps1 -CertificateSubject $CertificateSubject
             
-            # Verify signatures
-            Write-Host "`nVerifying signatures..." -ForegroundColor Cyan
-            $filesToSign | ForEach-Object {
-                Verify-Signature $_
+            if ($filesToVerify) {
+                Write-Host "`nVerifying signatures..." -ForegroundColor Cyan
+                $filesToVerify | ForEach-Object {
+                    Verify-Signature $_
+                }
             }
         }
         finally {
@@ -285,15 +278,15 @@ $commands = @(
 
 $signedCommands = @(
     @{
-        Name = "dotnet debug dll (signed) - exclude MI"
+        Name = "dotnet release dll (signed) - exclude MI"
         Setup = {
             Clean-DotNet
-            Build-DotNet "Debug"
-            Sign-Build "Debug"
+            Build-DotNet "Release"
+            Sign-Build "Release"
             Push-Location net
         }
         Command = {
-            $dllPath = Join-Path "bin" "Debug" "net9.0" "azsdkperf.dll"
+            $dllPath = Join-Path "bin" "Release" "net9.0" "azsdkperf.dll"
             dotnet $dllPath --excludeMI true
         }
         Cleanup = {
@@ -301,15 +294,15 @@ $signedCommands = @(
         }
     },
     @{
-        Name = "dotnet debug dll (signed) - include MI"
+        Name = "dotnet release dll (signed) - include MI"
         Setup = {
             Clean-DotNet
-            Build-DotNet "Debug"
-            Sign-Build "Debug"
+            Build-DotNet "Release"
+            Sign-Build "Release"
             Push-Location net
         }
         Command = {
-            $dllPath = Join-Path "bin" "Debug" "net9.0" "azsdkperf.dll"
+            $dllPath = Join-Path "bin" "Release" "net9.0" "azsdkperf.dll"
             dotnet $dllPath --excludeMI false
         }
         Cleanup = {

@@ -18,6 +18,38 @@ if (-not $IsWindows) {
 New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
 
 if ($IsWindows) {
+    # First remove existing certificates from all stores
+    $stores = @(
+        @{ Name = "Root"; Location = "LocalMachine" },
+        @{ Name = "Root"; Location = "CurrentUser" },
+        @{ Name = "TrustedPublisher"; Location = "LocalMachine" },
+        @{ Name = "TrustedPublisher"; Location = "CurrentUser" }
+    )
+
+    Write-Host "Removing any existing certificates with CN=$CertName..."
+    foreach ($store in $stores) {
+        try {
+            $certStore = New-Object System.Security.Cryptography.X509Certificates.X509Store(
+                $store.Name,
+                [System.Security.Cryptography.X509Certificates.StoreLocation]::($store.Location)
+            )
+            $certStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+            
+            $existingCerts = $certStore.Certificates | Where-Object { $_.Subject -eq "CN=$CertName" }
+            if ($existingCerts) {
+                foreach ($existing in $existingCerts) {
+                    $certStore.Remove($existing)
+                    Write-Host "✓ Removed existing certificate from $($store.Location)\$($store.Name)" -ForegroundColor Yellow
+                }
+            }
+            
+            $certStore.Close()
+        }
+        catch {
+            Write-Host "! Failed to remove certificates from $($store.Location)\$($store.Name): $_" -ForegroundColor Red
+        }
+    }
+
     # Create Windows certificate
     $cert = New-SelfSignedCertificate `
         -Subject "CN=$CertName" `
@@ -38,18 +70,39 @@ if ($IsWindows) {
     $securePwd = ConvertTo-SecureString -String $Password -Force -AsPlainText
     Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $securePwd
 
-    # Import into trusted stores
+    # Modified store import section
     $stores = @(
+        @{ Name = "Root"; Location = "LocalMachine" },
         @{ Name = "Root"; Location = "CurrentUser" },
+        @{ Name = "TrustedPublisher"; Location = "LocalMachine" },
         @{ Name = "TrustedPublisher"; Location = "CurrentUser" }
     )
 
+    # Import certificate into stores with additional error handling
     foreach ($store in $stores) {
         Write-Host "Installing certificate in $($store.Location)\$($store.Name) store..."
-        $certStore = New-Object System.Security.Cryptography.X509Certificates.X509Store $store.Name, $store.Location
-        $certStore.Open("ReadWrite")
-        $certStore.Add($cert)
-        $certStore.Close()
+        try {
+            $certStore = New-Object System.Security.Cryptography.X509Certificates.X509Store(
+                $store.Name,
+                [System.Security.Cryptography.X509Certificates.StoreLocation]::($store.Location)
+            )
+            $certStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+            
+            # Check if cert already exists
+            $existing = $certStore.Certificates | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
+            if ($existing) {
+                Write-Host "Certificate already exists in $($store.Location)\$($store.Name)" -ForegroundColor Yellow
+                $certStore.Remove($existing)
+            }
+            
+            $certStore.Add($cert)
+            $certStore.Close()
+            
+            Write-Host "✓ Successfully added to $($store.Location)\$($store.Name)" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "! Failed to add to $($store.Location)\$($store.Name): $_" -ForegroundColor Red
+        }
     }
 
     # Verify certificate is properly installed

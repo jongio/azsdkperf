@@ -14,17 +14,17 @@ if (-not $cert) {
 
 Write-Host "Using certificate: $($cert.Subject) ($($cert.Thumbprint))"
 
-# Find the specific files we want to sign
-$binPath = Join-Path "net" "bin" "*"
+# Find the specific files we want to sign - only in Release configuration
+$binPath = Join-Path "net" "bin" "Release"
 $filePaths = Get-ChildItem -Path $binPath -Recurse | Where-Object {
-    $_.Name -eq "azsdkperf.dll"
+    $_.Name -eq "azsdkperf.dll" -or $_.Name -eq "azsdkperf.exe"
 }
 
 if (-not $filePaths) {
-    throw "No azsdkperf.dll found to sign"
+    throw "No azsdkperf.dll or azsdkperf.exe found in Release configuration at $binPath"
 }
 
-Write-Host "Found files to sign:"
+Write-Host "Found release files to sign:"
 $filePaths | ForEach-Object { Write-Host "  - $($_.FullName)" }
 
 # Sign each file
